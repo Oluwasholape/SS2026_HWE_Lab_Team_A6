@@ -1,4 +1,4 @@
-#Lab 05: FPGA Design Intro
+# Lab 05: FPGA Design Intro
 
 ### Done by Team A6:
 - Akter, Suchi
