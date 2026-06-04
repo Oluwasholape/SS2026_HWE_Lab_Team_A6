@@ -6,8 +6,6 @@ This folder contains the Altium Designer files for the lab (custom title block, 
 
 Both options contain identical files
 
-#### Done by Team A6:
-- Akter, Suchi
+#### Done by:
 - Boiddo, Sumon
 - Nnachi-Egwu, Nnaemeka
-- Oyemade, Oluwasholape Daniel
