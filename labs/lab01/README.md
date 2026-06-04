@@ -1,4 +1,4 @@
 # Lab 01: VHDL Intro
 
-###### Done by:
+#### Done by:
 Nnachi-Egwu, Nnaemeka
