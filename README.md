@@ -10,5 +10,5 @@ Hochschule Hamm-Lippstadt
 - Oyemade, Oluwasholape Daniel
 
 ## Repository Structure
-- [labs](https://github.com/Oluwasholape/SS2026_HWE_Lab_Team_A6/tree/main/labs): VHDL lab exercises
+- [labs](https://github.com/Oluwasholape/SS2026_HWE_Lab_Team_A6/tree/main/labs): Lab exercises
 - [project](https://github.com/Oluwasholape/SS2026_HWE_Lab_Team_A6/tree/main/project): Final project files
