@@ -170,6 +170,36 @@ The master reset is **asynchronously asserted and synchronously released** to av
 
 ---
 
+## Project and Team Management
+
+### Approach
+
+The team follows a milestone-driven approach aligned with the course schedule. Weekly lab sessions serve as checkpoints; tasks and progress are tracked through this GitHub repository (issues and commit history document who did what).
+
+### Milestones
+
+| Date | Milestone |
+|---|---|
+| 11.06.2026 | Concept draft submission (this document) |
+| Week of 15.06 | VHDL implementation of all modules; self-checking testbenches passing in simulation |
+| Week of 22.06 | FPGA validation on the Nexys A7-100T; start of PCB schematic |
+| Week of 29.06 | PCB layout, BOM, and manufacturing files; presentation preparation |
+| 02.07.2026 | Final presentation |
+| 09.07.2026 | Final documentation submission |
+
+### Task Breakdown and Roles
+
+| Team Member | Role | Responsibilities |
+|---|---|---|
+| | VHDL / FSM Lead | Elevator FSM, scheduler, request register, timer units |
+| | Verification Lead | Self-checking testbenches, simulation of all test scenarios, waveform analysis |
+| | FPGA Integration Lead | Top-level integration, constraints file, synthesis/implementation, on-board validation |
+| | PCB Lead | Component selection, schematic, layout, BOM, Gerber files |
+
+Documentation and the final presentation are shared responsibilities; each member documents their own work area, with cross-review by another team member.
+
+---
+
 ## Technologies
 
 ### Hardware Platform
@@ -269,12 +299,49 @@ Minimum test scenarios validated in simulation before programming the board:
 
 ### Phase 2: Custom Application PCB
 
-After FPGA verification, the design migrates to a dedicated standalone PCB:
+After FPGA verification, the design migrates to a dedicated standalone PCB.
 
-1. **Power rail infrastructure** — step-down regulators provide a stable **3.3 V** rail for the I/O banks plus the discrete core and auxiliary rails required by the FPGA, with power-up sequencing per the device datasheet.
-2. **Decoupling and noise isolation** — decoupling capacitor arrays placed directly at the FPGA power pins (smallest values closest) to absorb switching noise and preserve supply integrity.
-3. **Signal conditioning** — defined pull-up/pull-down resistors on every push-button input plus first-order RC filters as analog pre-debouncing, ahead of the digital debounce logic.
-4. **Display and LED drive** — 7-segment display and indicator LEDs driven through current-limiting resistors sized within the FPGA I/O drive limits.
+**FPGA selection.** The board uses a smaller member of the same family as the prototype: an **Artix-7 XC7A35T** in a hand-routable package. The MVP occupies a tiny fraction of even that device, the VHDL sources and Vivado flow carry over unchanged within the family, and the smaller package significantly eases layout and reduces cost compared to reusing the XC7A100T.
+
+**Board-level block diagram.** The custom board carries only the components this project actually needs:
+
+```mermaid
+flowchart TB
+    subgraph BOARD["Custom Application PCB"]
+        direction TB
+        PWR["Power supply<br/>5 V in → 3.3 / 1.8 / 1.0 V"]
+        CFG["Config flash<br/>SPI"]
+        JTAG["JTAG header"]
+        OSC["100 MHz<br/>oscillator"]
+        FPGA["FPGA<br/>Artix-7 XC7A35T"]
+        BTN["Call buttons<br/>U / E / 1"]
+        RSTB["Reset button"]
+        SEG["7-segment display<br/>1 digit"]
+        LED["Status LEDs<br/>up / down / door"]
+    end
+
+    PWR --> FPGA
+    CFG --> FPGA
+    JTAG --> FPGA
+    OSC --> FPGA
+    BTN --> FPGA
+    RSTB --> FPGA
+    FPGA --> SEG
+    FPGA --> LED
+```
+
+The board comprises the following subsystems:
+
+1. **Power rail infrastructure** — step-down regulators derive the FPGA supply rails (**3.3 V** I/O, **1.0 V** core, **1.8 V** auxiliary) from a single input, with power-up sequencing per the Artix-7 datasheet.
+2. **Configuration and programming** — the FPGA is volatile, so a **SPI configuration flash** stores the bitstream and loads it automatically at power-up; a **JTAG header** provides programming and debug access during development.
+3. **Clock and reset** — an on-board **100 MHz oscillator** drives all logic, matching the prototype; a reset push button with RC filtering feeds the design's asynchronous-assert / synchronous-release reset scheme.
+4. **Decoupling and noise isolation** — decoupling capacitor arrays placed directly at the FPGA power pins (smallest values closest) to absorb switching noise and preserve supply integrity.
+5. **Signal conditioning** — defined pull-up/pull-down resistors on every push-button input plus first-order RC filters as analog pre-debouncing, ahead of the digital debounce logic.
+6. **Display and LED drive** — 7-segment display and indicator LEDs driven through current-limiting resistors sized within the FPGA I/O drive limits.
+
+**Design workflow.** The schematic is split into multiple sheets by function (power supply, FPGA, configuration and clock, peripherals). Each sheet is reviewed by another team member, an Electrical Rule Check (ERC) is run before layout, and a Design Rule Check (DRC) is run before generating manufacturing outputs.
+
+**PCB deliverables:** schematics, PCB layout, 3D model, BOM, and Gerber files.
 
 ---
 
@@ -294,6 +361,7 @@ Separate cabin/hall call interfaces, door obstruction sensors, overload detectio
 
 - Digilent Nexys A7 Reference Manual — https://digilent.com/reference/programmable-logic/nexys-a7/reference-manual
 - Xilinx 7 Series FPGAs Data Sheet (Artix-7) — AMD/Xilinx DS180 / DS181
+- Xilinx 7 Series FPGAs Configuration User Guide — AMD/Xilinx UG470
 - Xilinx Vivado Design Suite User Guide
 - IEEE Std 1076 — VHDL Language Reference Manual
 - Digilent Nexys A7 Master XDC Constraints File — https://github.com/Digilent/digilent-xdc
