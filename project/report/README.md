@@ -149,9 +149,9 @@ Remaining PCB work (owned by the PCB lead): schematic capture by functional shee
 | Date | Milestone | Status |
 |---|---|---|
 | 11.06 | Concept draft submitted | Done |
-| Wk 15.06 | All VHDL modules + self-checking testbenches passing | Done |
-| Wk 22.06 | FPGA validation on Nexys A7-100T | Done |
-| Wk 29.06 | PCB design; documentation draft; presentation prep | In progress |
+| 15.06 | All VHDL modules + self-checking testbenches passing | Done |
+| 22.06 | FPGA validation on Nexys A7-100T | Done |
+| 29.06 | PCB design; documentation draft; presentation prep | In progress |
 | 02.07 | Final presentation | Scheduled |
 | 09.07 | Final documentation | Pending |
 
