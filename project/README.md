@@ -3,7 +3,8 @@
 
 **Course:** Hardware Engineering Lab (SS 2026)
 **Professor:** Prof. Dr.-Ing. Ali Hayek
-**Submission Date:** 11.06.2026
+**Team:** A6
+**Concept submitted:** 11.06.2026 · **Updated to as-built design:** 30.06.2026
 
 ---
 
@@ -19,16 +20,16 @@
 
 Elevator controllers are a classic application of digital control: a small set of asynchronous user inputs must be arbitrated into a safe, deterministic sequence of actions. The decision core of every elevator is a Finite State Machine (FSM), which makes the problem an ideal candidate for an FPGA-based hardware design exercise.
 
-This project implements a **3-floor elevator controller** in VHDL as a **Minimum Viable Product (MVP)**: one call button per floor, timer-modeled motion, and status indication via a 7-segment display and LEDs. The focus lies on clean synchronous design, explicit request arbitration, and correct handling of asynchronous, bouncy inputs.
+This project implements a **3-floor elevator controller** in VHDL as a **Minimum Viable Product (MVP)**: one call button per floor, timer-modeled motion, and status indication via a 7-segment display and LEDs. The control core is a **three-state Mealy FSM**. The focus lies on clean synchronous design, explicit request arbitration, and correct handling of asynchronous, bouncy inputs.
 
 Development follows a two-phase pipeline:
 
 1. **Phase 1 — FPGA prototype:** simulation, synthesis, and live demonstration entirely on a **Digilent Nexys A7-100T** board. All required inputs and outputs (push buttons, LEDs, 7-segment display, 100 MHz clock) are available on-board — **no external hardware is used in this phase**.
-2. **Phase 2 — Custom PCB:** a dedicated standalone board specification that carries the verified design from the multi-purpose development board to application-specific hardware.
+2. **Phase 2 — Custom PCB:** a dedicated standalone board built around a **Lattice MachXO2** FPGA, carrying the verified design from the multi-purpose development board to application-specific hardware.
 
 The three floors follow German signage convention:
 
-| Floor label | German | English | Internal index |
+| Floor label | German | English | Internal code |
 |:---:|---|---|:---:|
 | **1** | 1. Obergeschoss | First floor | `10` |
 | **E** | Erdgeschoss | Ground floor | `01` |
@@ -40,39 +41,37 @@ The three floors follow German signage convention:
 
 ### Target Application
 
-The controller coordinates a single elevator cabin across three floors. Each floor has **one call button**; a press latches a request for that floor. A synchronous FSM arbitrates the pending requests with a starvation-free scheduling policy and drives the status outputs: the current floor character on a 7-segment display, two travel-direction LEDs, and a door-status LED.
+The controller coordinates a single elevator cabin across three floors. Each floor has **one call button**; a press latches a request for that floor. A synchronous FSM arbitrates the pending requests with a nearest-first scheduling policy and drives the status outputs: the current floor character on a 7-segment display, two travel-direction LEDs, and a door-status LED.
 
-### Block Diagram
+### System Block Diagram
 
 ```mermaid
 flowchart TD
     subgraph INPUT["Input Layer — Nexys A7 on-board"]
         direction LR
         CB["Call buttons<br/>BTNU / BTNC / BTND<br/>floors 1 / E / U"]
-        RST["Master reset<br/>CPU_RESET button"]
+        RST["Master reset<br/>CPU_RESETN (active-low)"]
         CLK["100 MHz<br/>oscillator"]
     end
 
     subgraph CORE["Control Core — VHDL on Artix-7 FPGA"]
         direction LR
-        SYNC["Input conditioning<br/>2-FF synchronizer<br/>+ debounce"]
-        REQ["Request register<br/>latch on press,<br/>clear on service"]
-        FSM["Elevator FSM<br/>+ scheduler"]
-        TMR["Travel & door timers<br/>(clock dividers)"]
-        DEC["7-segment decoder<br/>U / E / 1"]
+        DB["debouncer x3<br/>2-FF sync + debounce<br/>+ rising-edge pulse"]
+        FSM["elevator_fsm<br/>request latches +<br/>scheduler + floor reg +<br/>Mealy state logic"]
+        TMR["timer_unit<br/>travel & door<br/>down-counter"]
+        DEC["seg7_decoder<br/>U / E / 1"]
     end
 
     subgraph OUTPUT["Output Layer — Nexys A7 on-board"]
         direction LR
         SEG["7-segment display<br/>digit AN0"]
-        UP["LED1<br/>moving up"]
-        DN["LED0<br/>moving down"]
-        DOOR["LED2<br/>door open"]
+        UP["LD0 — moving up"]
+        DN["LD1 — moving down"]
+        DOOR["LD2 — door open"]
     end
 
-    CB --> SYNC
-    SYNC --> REQ
-    REQ --> FSM
+    CB --> DB
+    DB --> FSM
     RST --> FSM
     CLK --> TMR
     TMR --> FSM
@@ -86,144 +85,64 @@ flowchart TD
 
 ### Board Resource Mapping (Nexys A7-100T)
 
-The table below fixes the pin-level mapping used in the constraints file (`.xdc`):
+The table below fixes the pin-level mapping used in the constraints file (`elevator_constraints.xdc`):
 
-| Function | On-board resource | Notes |
-|---|---|---|
-| Call button — floor **1** | Push button `BTNU` | Vertical button layout mirrors floor order |
-| Call button — floor **E** | Push button `BTNC` | |
-| Call button — floor **U** | Push button `BTND` | |
-| Master reset | `CPU_RESET` button | Async assert, sync release (see FSM section) |
-| Floor display | 7-segment digit `AN0` | Characters `U` / `E` / `1` |
-| Direction up | `LED1` | |
-| Direction down | `LED0` | |
-| Door open | `LED2` | On only during `DOOR_OPEN` |
-| System clock | 100 MHz oscillator `E3` | All logic synchronous to this clock |
+| Function | On-board resource | Pin | Notes |
+|---|---|---|---|
+| Call button — floor **1** | `BTNU` | M18 | Active-high |
+| Call button — floor **E** | `BTNC` | N17 | Active-high |
+| Call button — floor **U** | `BTND` | P18 | Active-high |
+| Master reset | `CPU_RESETN` | C12 | Active-low; inverted to active-high internal reset |
+| Floor display | 7-segment digit `AN0` | — | Characters `U` / `E` / `1` |
+| Direction up | `LD0` | H17 | |
+| Direction down | `LD1` | K15 | |
+| Door open | `LD2` | J13 | On only during `DOOR_OPEN` |
+| System clock | 100 MHz oscillator | E3 | All logic synchronous to this clock |
 
 ---
 
 ## Control Logic and State Architecture
 
-### Request Register
+### Request Latching
 
-Button presses are momentary, but a request must persist until it is served. A 3-bit **request register** (one bit per floor) latches each conditioned button press. A floor's bit is cleared exactly once — when the cabin arrives at that floor and enters `DOOR_OPEN` — so a held or repeated press cannot re-trigger the same trip.
+Button presses are momentary, but a request must persist until it is served. Three **request latches** (one per floor), integrated inside the FSM, capture each debounced button pulse independently of the current state — so a press is never missed, even mid-travel. A floor's latch is cleared exactly once: when the cabin reaches that floor and enters `DOOR_OPEN`.
 
-### State Diagram
+### State Diagram (Three-State Mealy FSM)
 
 ```mermaid
 stateDiagram-v2
     direction LR
 
-    classDef idleStyle fill:#dbe9ff,stroke:#3b6ea5,stroke-width:2px,color:#1a3a5c
-    classDef movingStyle fill:#ffe9c7,stroke:#c98a2b,stroke-width:2px,color:#5c3d0e
-    classDef doorStyle fill:#d8f3e0,stroke:#2f8f5b,stroke-width:2px,color:#14502f
+    [*] --> IDLE : reset — cabin at E
 
-    state "IDLE" as IDLE
-    state "MOVING_UP" as UP
-    state "MOVING_DOWN" as DOWN
-    state "DOOR_OPEN" as DOOR
-
-    IDLE : LEDs off
-    UP : LED1 on
-    DOWN : LED0 on
-    DOOR : LED2 on
-
-    [*] --> IDLE : reset
-
-    IDLE --> DOOR : call at floor
-    IDLE --> UP : call above
-    IDLE --> DOWN : call below
-
-    UP --> DOOR : arrived
-    DOWN --> DOOR : arrived
-
-    DOOR --> IDLE : no calls left
-    DOOR --> UP : call above
-    DOOR --> DOWN : call below
-
-    class IDLE idleStyle
-    class UP movingStyle
-    class DOWN movingStyle
-    class DOOR doorStyle
+    IDLE --> DOOR_OPEN : call for current floor / start door timer
+    IDLE --> MOVING : call for another floor / set direction, start travel timer
+    MOVING --> MOVING : travel timer done, not yet at target / step one floor
+    MOVING --> DOOR_OPEN : arrived at target / clear request, start door timer
+    DOOR_OPEN --> IDLE : door timer done
 ```
 
-The FSM intentionally has **no final state**: an elevator controller runs indefinitely, returning to `IDLE` whenever the request register is empty. The `[*]` marker denotes only the entry point after reset.
+The machine is **Mealy**: outputs depend on state *and* input. The direction LEDs assert the same cycle a call resolves in `IDLE`, one cycle before the state register updates. This is also why a single `MOVING` state suffices — travel direction is an output computed from target-vs-current, not a separate state. The FSM has **no final state**; it returns to `IDLE` whenever no request is pending.
 
 | State | Behavior |
 |---|---|
-| `IDLE` | Cabin stationary at a floor (U, E, or 1), doors closed, awaiting a latched request. All status LEDs off. |
-| `MOVING_UP` | Entered when a pending request index is above the current floor index. The travel timer models per-floor transit time; the floor register increments on timer expiry. `LED1` asserted. |
-| `MOVING_DOWN` | Mirror of `MOVING_UP` for descent. `LED0` asserted. |
-| `DOOR_OPEN` | Cabin holds at the target floor for the door-timer window. `LED2` asserted, the served floor's request bit cleared. On expiry, the scheduler evaluates remaining requests. |
+| `IDLE` | Cabin stationary, doors closed, awaiting a latched request. All status LEDs off. |
+| `MOVING` | Travelling toward the selected target. The travel timer paces per-floor transit; the floor register steps one floor on each expiry. Up or down LED asserted. |
+| `DOOR_OPEN` | Cabin holds at the target floor for the door-timer window. Door LED asserted; the served floor's request latch cleared. On expiry, returns to `IDLE` and re-evaluates. |
 
-### Scheduling Policy (Direction Priority)
+### Scheduling Policy
 
-1. **Continue in the current travel direction** while any request remains in that direction (a request at *E* is served on the way during a *U → 1* trip).
-2. Only when no requests remain ahead does the controller reverse direction or return to `IDLE`.
-3. From `IDLE`, simultaneous requests above and below are resolved nearest-floor-first; an exact tie is broken toward **up**.
+The scheduler runs in `IDLE` and selects **one target per service cycle**:
 
-Every latched request is therefore served in bounded time.
+1. Among pending requests, choose the floor **nearest** to the current floor.
+2. On an exact distance tie, resolve **upward** (the higher floor is served first).
+3. Serve that target, then return to `IDLE` and re-evaluate the remaining latches.
+
+A request registered while the cabin is already moving is **not** picked up mid-travel; it is served on the following service cycle. Because every latched request is eventually selected and latches are never starved indefinitely (each cycle removes the nearest), all requests are served in bounded time. *(SCAN-style directional pickup — stopping at intermediate floors on the way — is a documented out-of-scope extension; see MVP boundaries.)*
 
 ### Reset Behavior
 
-The master reset is **asynchronously asserted and synchronously released** to avoid recovery metastability. On reset the FSM enters `IDLE`, all request bits are cleared, and the floor register initializes to **U** — demonstrations begin with the (virtual) cabin in the basement.
-
----
-
-## Project and Team Management
-
-### Approach
-
-The team follows a milestone-driven approach aligned with the course schedule. Weekly lab sessions serve as checkpoints; tasks and progress are tracked through this GitHub repository (issues and commit history document who did what).
-
-### Milestones
-
-| Date | Milestone |
-|---|---|
-| 11.06.2026 | Concept draft submission (this document) |
-| Week of 15.06 | VHDL implementation of all modules; self-checking testbenches passing in simulation |
-| Week of 22.06 | FPGA validation on the Nexys A7-100T; start of PCB schematic |
-| Week of 29.06 | PCB layout, BOM, and manufacturing files; presentation preparation |
-| 02.07.2026 | Final presentation |
-| 09.07.2026 | Final documentation submission |
-
-### Task Breakdown and Roles
-
-| Team Member | Role | Responsibilities |
-|---|---|---|
-| | VHDL / FSM Lead | Elevator FSM, scheduler, request register, timer units |
-| | Verification Lead | Self-checking testbenches, simulation of all test scenarios, waveform analysis |
-| | FPGA Integration Lead | Top-level integration, constraints file, synthesis/implementation, on-board validation |
-| | PCB Lead | Component selection, schematic, layout, BOM, Gerber files |
-
-Documentation and the final presentation are shared responsibilities; each member documents their own work area, with cross-review by another team member.
-
----
-
-## Technologies
-
-### Hardware Platform
-
-- **Digilent Nexys A7-100T:** Xilinx **Artix-7 XC7A100T** FPGA, 100 MHz oscillator, push buttons, LEDs, and an 8-digit 7-segment display — covering every MVP input and output with zero external components.
-- **7-segment display:** common-anode, shared cathode bus. Only one character is shown, so a single digit (`AN0`) is held active — no multiplexing logic required in the MVP.
-
-### Design and Verification Tools
-
-- **VHDL (IEEE 1076):** RTL description of all modules; synchronous FSM design style.
-- **Xilinx Vivado:** simulation (XSim), synthesis, implementation, bitstream generation, and on-target debugging (ILA if needed).
-- **Self-checking testbenches:** stimulus replay of representative trip patterns with assertion-based result checking, complemented by waveform inspection.
-
-### Timing Design
-
-All timing derives from the 100 MHz board clock via enable-based counters (no derived or gated clocks):
-
-| Timer | Default value | Purpose |
-|---|---|---|
-| Debounce window | 10 ms | Filters mechanical bounce after the 2-FF synchronizer |
-| Travel timer | 2 s per floor | Models transit time between adjacent floors |
-| Door timer | 3 s | Models passenger entry/exit window |
-
-All three are VHDL **generics**, shortened by orders of magnitude in simulation so testbenches run in microseconds.
+The design uses a **single synchronous reset**. The physical button is `CPU_RESETN` (active-low: released = 1 = run, pressed = 0 = reset); this is inverted once at the top level into an active-high internal reset distributed to all modules. On reset the FSM enters `IDLE`, all request latches clear, and the floor register initializes to **E** (ground floor) — demonstrations begin with the cabin at E. The design runs immediately on power-up; no button press is required to start.
 
 ---
 
@@ -231,137 +150,174 @@ All three are VHDL **generics**, shortened by orders of magnitude in simulation 
 
 ### Module Structure
 
+Six VHDL design units. The original concept's separate `input_conditioner` and `request_register` were consolidated — input conditioning into a reusable `debouncer` (instantiated three times), and request latching into the FSM — reducing inter-module signalling and reaching a verified system faster.
+
 ```mermaid
 classDiagram
+    class elevator_pkg {
+        +floor codes U/E/1
+        +state_t : IDLE/MOVING/DOOR_OPEN
+        +timer_mode_t : TRAVEL/DOOR
+    }
     class elevator_top {
-        +clk : 100 MHz
-        +btn_call[2:0]
-        +cpu_resetn
+        +clk, resetn
+        +btn_1, btn_e, btn_u
         +seg[6:0], an[7:0]
         +led_up, led_down, led_door
     }
-
-    class input_conditioner {
+    class debouncer {
         +generic DEBOUNCE_CYCLES
         +sync_2ff()
         +debounce()
-        +edge_detect()
+        +rising_edge_pulse()
     }
-
-    class request_register {
-        +req[2:0]
-        +latch(floor)
-        +clear(floor)
-    }
-
     class elevator_fsm {
-        +state : IDLE / UP / DOWN / DOOR
+        +state : IDLE/MOVING/DOOR_OPEN
         +current_floor[1:0]
-        +schedule() direction
-        +next_state_logic()
-        +output_logic()
+        +req latches [2:0]
+        +schedule_nearest_tie_up()
+        +mealy_next_state_and_output()
     }
-
     class timer_unit {
         +generic TRAVEL_CYCLES
         +generic DOOR_CYCLES
         +start(mode)
-        +done : std_logic
+        +done : 1-cycle pulse
     }
-
-    class sevenseg_decoder {
+    class seg7_decoder {
         +floor_to_segments(U/E/1)
         +drive_an0()
     }
 
-    elevator_top --> input_conditioner
+    elevator_top --> debouncer
     elevator_top --> elevator_fsm
-    input_conditioner --> request_register
-    request_register --> elevator_fsm
+    elevator_top --> timer_unit
+    elevator_top --> seg7_decoder
+    debouncer --> elevator_fsm
     elevator_fsm --> timer_unit
     timer_unit --> elevator_fsm
-    elevator_fsm --> sevenseg_decoder
+    elevator_fsm --> seg7_decoder
+    elevator_pkg ..> elevator_top : shared types
 ```
 
-### Phase 1: Simulation and FPGA Verification
+### Timing Design
 
-Minimum test scenarios validated in simulation before programming the board:
+All timing derives from the 100 MHz board clock via enable-based counters — no derived or gated clocks:
+
+| Timer | Default value | Purpose |
+|---|---|---|
+| Debounce window | 10 ms | Filters mechanical bounce after the 2-FF synchronizer |
+| Travel timer | 2 s per floor | Models transit time between adjacent floors |
+| Door timer | 3 s | Models passenger entry/exit window |
+
+All three are VHDL **generics**, shortened by orders of magnitude in simulation (the "N-test" technique) so testbenches run in microseconds while the synthesized hardware uses full-scale values — a single source serves both.
+
+### Minimum Test Scenarios
 
 | # | Scenario | Expected behavior |
 |:---:|---|---|
-| 1 | Reset, then call from floor **1** while cabin at **U** | `IDLE → MOVING_UP` (passing E without stopping) `→ DOOR_OPEN` at 1 |
-| 2 | Call button for the current floor | Direct `IDLE → DOOR_OPEN`, no movement |
-| 3 | Requests at **U** and **1** while cabin at **E** | Nearest-first arbitration; both served, neither starved |
-| 4 | New same-direction request arrives mid-travel | Served on the way (direction priority) |
-| 5 | Button held down continuously | Exactly one latched request; no re-trigger |
-| 6 | Reset asserted during `MOVING_UP` | Immediate return to `IDLE` at U, request register cleared |
-| 7 | Bouncy stimulus on all inputs | Debounce yields one clean request per press |
+| 1 | Reset | `IDLE`, display **E**, all LEDs off |
+| 2 | At E, call floor **1** | Up LED, travel one floor, `DOOR_OPEN` at **1** |
+| 3 | At 1, call **U** | Down LED, step through **E** to **U**, door at U |
+| 4 | Call current floor | Direct `IDLE → DOOR_OPEN`, no movement, no direction LED |
+| 5 | Bouncy press | Debounce yields exactly one request per press |
+| 6 | At E, call **U** and **1** together | Tie resolved up: serve **1** first, then **U** |
+| 7 | At U, call **1** | Up LED, display steps **U → E → 1**, single door at 1 |
 
-### Phase 2: Custom Application PCB
+---
 
-After FPGA verification, the design migrates to a dedicated standalone PCB.
+## Phase 2: Custom Application PCB
 
-**FPGA selection.** The board uses a smaller member of the same family as the prototype: an **Artix-7 XC7A35T** in a hand-routable package. The MVP occupies a tiny fraction of even that device, the VHDL sources and Vivado flow carry over unchanged within the family, and the smaller package significantly eases layout and reduces cost compared to reusing the XC7A100T.
+After FPGA verification the design migrates to a dedicated standalone board, designed in **Altium Designer** and synthesized for Lattice silicon in **Lattice Diamond**.
 
-**Board-level block diagram.** The custom board carries only the components this project actually needs:
+**FPGA selection — Lattice MachXO2 `LCMXO2-640HC-4TG100C`.** A small, low-pin-count FPGA (640 LUTs, 100-pin TQFP, hand-solderable). The MVP occupies a tiny fraction of its resources, and the part choice deliberately simplifies the board versus reusing the Artix-7:
+
+- **Single-supply power.** The `HC` device has an on-chip linear regulator and runs from one external **3.3 V** (or 2.5 V) supply, generating its core voltage internally — eliminating the multi-rail (3.3 / 1.8 / 1.0 V) supply and power-sequencing the Artix-7 would have required.
+- **Instant-on, no external config memory.** MachXO2 is non-volatile with internal configuration flash, so the bitstream is stored on-chip and loads at power-up. No external SPI configuration flash is needed; a **JTAG header** provides programming and debug.
+- **RTL portability.** The VHDL sources are vendor-neutral (no Xilinx primitives or IP), so they synthesize in Lattice Diamond unchanged.
+
+**Board-level block diagram.**
 
 ```mermaid
 flowchart TB
     subgraph BOARD["Custom Application PCB"]
         direction TB
-        PWR["Power supply<br/>5 V in → 3.3 / 1.8 / 1.0 V"]
-        CFG["Config flash<br/>SPI"]
-        JTAG["JTAG header"]
-        OSC["100 MHz<br/>oscillator"]
-        FPGA["FPGA<br/>Artix-7 XC7A35T"]
-        BTN["Call buttons<br/>U / E / 1"]
-        RSTB["Reset button"]
+        PWR["Power<br/>3.3 V single supply<br/>(core regulated on-chip)"]
+        JTAG["JTAG header<br/>program / debug"]
+        OSC["Clock<br/>internal osc or<br/>external 100 MHz"]
+        FPGA["FPGA<br/>Lattice MachXO2<br/>LCMXO2-640HC-4TG100C"]
+        BTN["Call buttons<br/>U / E / 1 + reset"]
         SEG["7-segment display<br/>1 digit"]
         LED["Status LEDs<br/>up / down / door"]
     end
-
     PWR --> FPGA
-    CFG --> FPGA
     JTAG --> FPGA
     OSC --> FPGA
     BTN --> FPGA
-    RSTB --> FPGA
     FPGA --> SEG
     FPGA --> LED
 ```
 
-The board comprises the following subsystems:
+**Subsystems:** single-rail 3.3 V power with decoupling capacitor arrays at the FPGA power pins; JTAG programming/debug header; clock (internal oscillator or external 100 MHz); pull-down resistors and first-order RC pre-filtering on every button input ahead of the digital debounce; current-limited 7-segment and LED drive within the device I/O limits.
 
-1. **Power rail infrastructure** — step-down regulators derive the FPGA supply rails (**3.3 V** I/O, **1.0 V** core, **1.8 V** auxiliary) from a single input, with power-up sequencing per the Artix-7 datasheet.
-2. **Configuration and programming** — the FPGA is volatile, so a **SPI configuration flash** stores the bitstream and loads it automatically at power-up; a **JTAG header** provides programming and debug access during development.
-3. **Clock and reset** — an on-board **100 MHz oscillator** drives all logic, matching the prototype; a reset push button with RC filtering feeds the design's asynchronous-assert / synchronous-release reset scheme.
-4. **Decoupling and noise isolation** — decoupling capacitor arrays placed directly at the FPGA power pins (smallest values closest) to absorb switching noise and preserve supply integrity.
-5. **Signal conditioning** — defined pull-up/pull-down resistors on every push-button input plus first-order RC filters as analog pre-debouncing, ahead of the digital debounce logic.
-6. **Display and LED drive** — 7-segment display and indicator LEDs driven through current-limiting resistors sized within the FPGA I/O drive limits.
+**Workflow.** Schematic split by function (power, FPGA + config, clock/reset, peripherals), cross-reviewed, Electrical Rule Check before layout, Design Rule Check before manufacturing outputs.
 
-**Design workflow.** The schematic is split into multiple sheets by function (power supply, FPGA, configuration and clock, peripherals). Each sheet is reviewed by another team member, an Electrical Rule Check (ERC) is run before layout, and a Design Rule Check (DRC) is run before generating manufacturing outputs.
-
-**PCB deliverables:** schematics, PCB layout, 3D model, BOM, and Gerber files.
+**PCB deliverables:** schematics, PCB layout, 3D model, BOM, Gerber files.
 
 ---
 
 ## Out of Scope (MVP Boundaries)
 
-Separate cabin/hall call interfaces, door obstruction sensors, overload detection, emergency stop and alarm, motor/actuator control (movement is timer-modeled), homing/reference runs, multi-cabin coordination, and destination dispatch optimization.
+SCAN-style directional pickup of intermediate calls, separate cabin/hall call interfaces, door obstruction sensors, overload detection, emergency stop/alarm, real motor/actuator control (movement is timer-modeled), homing runs, multi-cabin coordination, and destination dispatch optimization.
 
 ---
 
 ## Results
 
-*To be completed after implementation. Will include simulation waveforms of the test scenarios, resource utilization and timing reports from Vivado, and photos/video of the live demonstration on the Nexys A7-100T.*
+Phase 1 complete. All seven scenarios pass in self-checking simulation (XSim) and on hardware (Nexys A7-100T). Resource utilization is a small fraction of the XC7A100T with large positive timing slack at 100 MHz. See `report/` for the full verification table, Vivado utilization/timing screenshots, RTL schematic, and demonstration video.
+
+---
+
+## Project Management
+
+### Timeline
+| Date | Milestone | Status |
+|---|---|---|
+| 11.06 | Concept draft submitted | Done |
+| Wk 15.06 | All VHDL modules + self-checking testbenches passing | Done |
+| Wk 22.06 | FPGA validation on Nexys A7-100T | Done |
+| Wk 29.06 | PCB design; documentation draft; presentation prep | In progress |
+| 02.07 | Final presentation | Scheduled |
+| 09.07 | Final documentation | Pending |
+
+### Roles
+| Member | Role | Contribution |
+|---|---|---|
+| Nnachi-Egwu, Nnaemeka | VHDL lead | Module RTL, FSM and scheduler, top-level integration, constraints, on-board bring-up |
+| Boiddo, Sumon | Verification | Self-checking testbenches, simulation of all scenarios, results sign-off |
+| Akter, Suchi | FPGA demo support | On-board demonstration, screenshots, demonstration video |
+| Oyemade, Oluwasholape Daniel | PCB lead | Altium schematic, layout, BOM, Gerbers (MachXO2) |
+
+Progress is tracked through the GitHub repository; the commit history is the authoritative record of individual contributions.
+
+---
+
+## Repository Structure
+
+```
+/src      VHDL design sources (6) + constraints
+/tb       self-checking testbenches (5)
+/report   technical report, screenshots, demo video, slides
+/pcb      Altium project, schematic, layout, BOM, Gerbers (Phase 2)
+```
 
 ---
 
 ## Sources / References
 
-- Digilent Nexys A7 Reference Manual — https://digilent.com/reference/programmable-logic/nexys-a7/reference-manual
-- Xilinx 7 Series FPGAs Data Sheet (Artix-7) — AMD/Xilinx DS180 / DS181
-- Xilinx 7 Series FPGAs Configuration User Guide — AMD/Xilinx UG470
-- Xilinx Vivado Design Suite User Guide
+- Digilent Nexys A7 Reference Manual
+- AMD/Xilinx 7 Series FPGAs Data Sheet (Artix-7), DS180 / DS181
+- Lattice MachXO2 Family Data Sheet, FPGA-DS-02056
+- AMD/Xilinx Vivado Design Suite User Guide; Lattice Diamond User Guide
 - IEEE Std 1076 — VHDL Language Reference Manual
-- Digilent Nexys A7 Master XDC Constraints File — https://github.com/Digilent/digilent-xdc
+- Digilent Nexys A7 Master XDC Constraints File
