@@ -122,12 +122,12 @@ Each module has a dedicated self-checking testbench using VHDL `assert` with `se
 
 Synthesis and implementation completed in Vivado; bitstream generated and programmed via the Hardware Manager.
 
-- **RTL schematic** — see `rtl_schematic.png`: shows the six-module structure and the three debouncer instances.
-- **Resource utilization** — see `utilization.png`: a few hundred LUTs/flip-flops, a small fraction of the XC7A100T. This headroom is the quantitative justification for selecting a far smaller FPGA for the PCB.
-- **Timing** — see `timing_summary.png`: large positive Worst Negative Slack at the 100 MHz constraint; the logic is trivially within timing.
+- **RTL schematic** — see `RTL_Schematic.png`: shows the six-module structure and the three debouncer instances.
+- **Resource utilization** — see `Utilization.png`: a few hundred LUTs/flip-flops, a small fraction of the XC7A100T. This headroom is the quantitative justification for selecting a far smaller FPGA for the PCB.
+- **Timing** — see `Timing_Summary.png`: large positive Worst Negative Slack at the 100 MHz constraint; the logic is trivially within timing.
 
 ### Hardware demonstration
-On programming, the board shows **E** with all LEDs off, confirming correct reset polarity (the design runs without pressing reset). The seven scenarios were exercised live and matched simulation. A demonstration video (`demo_video.mp4`) is included as presentation backup (Plan B).
+On programming, the board shows **E** with all LEDs off, confirming correct reset polarity (the design runs without pressing reset). The seven scenarios were exercised live and matched simulation. A demonstration video is included as presentation backup (Plan B).
 
 ---
 
