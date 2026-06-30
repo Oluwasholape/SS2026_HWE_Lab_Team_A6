@@ -8,11 +8,28 @@
 
 ---
 
-## Team Members (Team A6)
-- Akter, Suchi
-- Boiddo, Sumon
-- Nnachi-Egwu, Nnaemeka
-- Oyemade, Oluwasholape Daniel
+## Project Management
+
+### Timeline
+| Date | Milestone | Status |
+|---|---|---|
+| 11.06 | Concept draft submitted | Done |
+| Wk 15.06 | All VHDL modules + self-checking testbenches passing | Done |
+| Wk 22.06 | FPGA validation on Nexys A7-100T | Done |
+| Wk 29.06 | PCB design; documentation draft; presentation prep | In progress |
+| 02.07 | Final presentation | Scheduled |
+| 09.07 | Final documentation | Pending |
+
+### Roles
+| Member | Role | Contribution |
+|---|---|---|
+| Nnachi-Egwu, Nnaemeka | VHDL lead | Module RTL, FSM and scheduler, top-level integration, constraints, on-board bring-up |
+| Boiddo, Sumon | Verification | Self-checking testbenches, simulation of all scenarios, results sign-off |
+| Akter, Suchi | FPGA demo support | On-board demonstration, screenshots, demonstration video |
+| Oyemade, Oluwasholape Daniel | PCB lead | Altium schematic, layout, BOM, Gerbers (MachXO2) |
+
+Progress is tracked through the GitHub repository; the commit history is the authoritative record of individual contributions.
+
 
 ---
 
@@ -275,30 +292,6 @@ SCAN-style directional pickup of intermediate calls, separate cabin/hall call in
 ## Results
 
 Phase 1 complete. All seven scenarios pass in self-checking simulation (XSim) and on hardware (Nexys A7-100T). Resource utilization is a small fraction of the XC7A100T with large positive timing slack at 100 MHz. See `report/` for the full verification table, Vivado utilization/timing screenshots, RTL schematic, and demonstration video.
-
----
-
-## Project Management
-
-### Timeline
-| Date | Milestone | Status |
-|---|---|---|
-| 11.06 | Concept draft submitted | Done |
-| Wk 15.06 | All VHDL modules + self-checking testbenches passing | Done |
-| Wk 22.06 | FPGA validation on Nexys A7-100T | Done |
-| Wk 29.06 | PCB design; documentation draft; presentation prep | In progress |
-| 02.07 | Final presentation | Scheduled |
-| 09.07 | Final documentation | Pending |
-
-### Roles
-| Member | Role | Contribution |
-|---|---|---|
-| Nnachi-Egwu, Nnaemeka | VHDL lead | Module RTL, FSM and scheduler, top-level integration, constraints, on-board bring-up |
-| Boiddo, Sumon | Verification | Self-checking testbenches, simulation of all scenarios, results sign-off |
-| Akter, Suchi | FPGA demo support | On-board demonstration, screenshots, demonstration video |
-| Oyemade, Oluwasholape Daniel | PCB lead | Altium schematic, layout, BOM, Gerbers (MachXO2) |
-
-Progress is tracked through the GitHub repository; the commit history is the authoritative record of individual contributions.
 
 ---
 
