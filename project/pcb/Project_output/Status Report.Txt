@@ -1,0 +1,29 @@
+Output: Gerber X2 Files
+Type  : GerberX2
+From  : Variant [[No Variations]] of Project [3-Floor Elevator Controller 1(MVP).PrjPcb]
+   Generated File[Elevator_Controller_Copper_Signal_Top.gbr]
+   Generated File[Elevator_Controller_Copper_Signal_Bot.gbr]
+   Generated File[Elevator_Controller_Pads_Bot.gbr]
+   Generated File[Elevator_Controller_Pads_Top.gbr]
+   Generated File[Elevator_Controller_Legend_Top.gbr]
+   Generated File[Elevator_Controller_Soldermask_Top.gbr]
+   Generated File[Elevator_Controller_Soldermask_Bot.gbr]
+   Generated File[Elevator_Controller_Paste_Top.gbr]
+   Generated File[Elevator_Controller_Paste_Bot.gbr]
+   Generated File[Elevator_Controller_Top_Component_Center.gbr]
+   Generated File[Elevator_Controller_Top_Assembly.gbr]
+   Generated File[Elevator_Controller_Top_Courtyard.gbr]
+   Generated File[Elevator_Controller_Top_3D_Body.gbr]
+   Generated File[Elevator_Controller_Top_Designator.gbr]
+   Generated File[Elevator_Controller_Profile.gbr]
+   Generated File[Elevator_Controller_PTH_Drill.gbr]
+   Generated File[Elevator_Controller_Drawing_1.gbr]
+   Generated File[Elevator_Controller_Drillmap_1.gbr]
+   Generated File[Elevator_Controller.EXTREP]
+   Generated File[Elevator_Controller.REP]
+
+
+Files Generated   : 20
+Documents Printed : 0
+
+Finished Output Generation At 07:00:42 On 01/07/2026
